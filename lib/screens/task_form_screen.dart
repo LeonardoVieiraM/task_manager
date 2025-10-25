@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/task.dart';
+import '../models/category.dart';
 import '../services/database_service.dart';
 
 class TaskFormScreen extends StatefulWidget {
-  final Task? task; // null = criar novo, não-null = editar
+  final Task? task;
 
   const TaskFormScreen({super.key, this.task});
 
@@ -19,29 +20,93 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   String _priority = 'medium';
   bool _completed = false;
   bool _isLoading = false;
+  DateTime? _dueDate;
+  Category? _selectedCategory;
+  List<Category> _categories = [];
 
   @override
   void initState() {
     super.initState();
+    _loadCategories();
     
-    // Se estiver editando, preencher campos
+    // Inicializar controllers com dados da tarefa (se houver)
     if (widget.task != null) {
       _titleController.text = widget.task!.title;
       _descriptionController.text = widget.task!.description;
       _priority = widget.task!.priority;
       _completed = widget.task!.completed;
+      _dueDate = widget.task!.dueDate;
+      // _selectedCategory será definido após carregar as categorias
     }
   }
 
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
-    super.dispose();
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await DatabaseService.instance.getAllCategories();
+      
+      setState(() {
+        _categories = categories;
+        
+        // Se estiver editando uma tarefa, encontrar a categoria correspondente
+        if (widget.task != null && categories.isNotEmpty) {
+          // Encontrar a categoria que corresponde à categoria da tarefa pelo ID
+          final taskCategoryId = widget.task!.category.id;
+          _selectedCategory = categories.firstWhere(
+            (category) => category.id == taskCategoryId,
+            orElse: () => categories.last, // Fallback para a última categoria
+          );
+        } else if (_selectedCategory == null && categories.isNotEmpty) {
+          _selectedCategory = categories.last;
+        }
+      });
+      
+      print('Categorias carregadas: ${_categories.length}');
+      print('Categoria selecionada: ${_selectedCategory?.name}');
+    } catch (e) {
+      print('Erro ao carregar categorias: $e');
+    }
+  }
+
+  Future<void> _selectDueDate() async {
+    final initialDate = _dueDate ?? DateTime.now();
+    final firstDate = DateTime.now().subtract(const Duration(days: 365));
+    final lastDate = DateTime.now().add(const Duration(days: 365 * 5));
+
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Colors.blue,
+              onPrimary: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedDate != null) {
+      setState(() => _dueDate = pickedDate);
+    }
   }
 
   Future<void> _saveTask() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, selecione uma categoria'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
@@ -55,6 +120,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
           description: _descriptionController.text.trim(),
           priority: _priority,
           completed: _completed,
+          dueDate: _dueDate,
+          category: _selectedCategory!,
         );
         await DatabaseService.instance.create(newTask);
         
@@ -74,6 +141,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
           description: _descriptionController.text.trim(),
           priority: _priority,
           completed: _completed,
+          dueDate: _dueDate,
+          category: _selectedCategory,
         );
         await DatabaseService.instance.update(updatedTask);
         
@@ -89,7 +158,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       }
 
       if (mounted) {
-        Navigator.pop(context, true); // Retorna true = sucesso
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -166,9 +235,93 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                     ),
                     
                     const SizedBox(height: 16),
+
+                    // Dropdown de Categoria - CORRIGIDO
+                    _categories.isEmpty
+                        ? const ListTile(
+                            leading: CircularProgressIndicator(),
+                            title: Text('Carregando categorias...'),
+                          )
+                        : DropdownButtonFormField<Category>(
+                            decoration: const InputDecoration(
+                              labelText: 'Categoria *',
+                              prefixIcon: Icon(Icons.category),
+                              border: OutlineInputBorder(),
+                            ),
+                            value: _selectedCategory,
+                            items: _categories.map((Category category) {
+                              return DropdownMenuItem<Category>(
+                                value: category,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 16,
+                                      height: 16,
+                                      decoration: BoxDecoration(
+                                        color: category.color,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(category.name),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (Category? newValue) {
+                              setState(() {
+                                _selectedCategory = newValue;
+                              });
+                            },
+                            validator: (Category? value) {
+                              if (value == null) {
+                                return 'Por favor, selecione uma categoria';
+                              }
+                              return null;
+                            },
+                          ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Campo de Data de Vencimento
+                    InkWell(
+                      onTap: _selectDueDate,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Data de Vencimento',
+                          prefixIcon: Icon(Icons.calendar_today),
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _dueDate == null
+                                  ? 'Selecionar data'
+                                  : '${_dueDate!.day}/${_dueDate!.month}/${_dueDate!.year}',
+                              style: TextStyle(
+                                color: _dueDate == null
+                                    ? Colors.grey.shade600
+                                    : null,
+                              ),
+                            ),
+                            if (_dueDate != null)
+                              IconButton(
+                                icon: const Icon(Icons.clear, size: 20),
+                                onPressed: () {
+                                  setState(() => _dueDate = null);
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 16),
                     
                     // Dropdown de Prioridade
                     DropdownButtonFormField<String>(
+                      value: _priority,
                       decoration: const InputDecoration(
                         labelText: 'Prioridade',
                         prefixIcon: Icon(Icons.flag),
@@ -216,7 +369,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                           ),
                         ),
                       ],
-                      onChanged: (value) {
+                      onChanged: (String? value) {
                         if (value != null) {
                           setState(() => _priority = value);
                         }

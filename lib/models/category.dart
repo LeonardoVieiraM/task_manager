@@ -29,6 +29,7 @@ class Category {
   }
 }
 
+// Categorias padrão
 final List<Category> defaultCategories = [
   Category(name: 'Trabalho', color: Colors.blue),
   Category(name: 'Pessoal', color: Colors.green),

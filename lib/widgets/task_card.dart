@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/task.dart';
 
 class TaskCard extends StatelessWidget {
@@ -16,191 +15,202 @@ class TaskCard extends StatelessWidget {
     required this.onDelete,
   });
 
-  Color _getPriorityColor() {
-    switch (task.priority) {
-      case 'low':
-        return Colors.green;
-      case 'medium':
-        return Colors.orange;
-      case 'high':
-        return Colors.red;
-      case 'urgent':
-        return Colors.purple;
-      default:
-        return Colors.grey;
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: ListTile(
+        leading: _buildLeading(),
+        title: _buildTitle(),
+        subtitle: _buildSubtitle(),
+        trailing: _buildTrailing(),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildLeading() {
+    return Stack(
+      children: [
+        // Círculo da categoria
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: task.category.color.withOpacity(0.2),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: task.category.color,
+              width: 2,
+            ),
+          ),
+          child: Icon(
+            _getPriorityIcon(),
+            color: task.category.color,
+            size: 20,
+          ),
+        ),
+        // Indicador de vencimento
+        if (task.isOverdue)
+          Positioned(
+            right: 0,
+            top: 0,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.warning,
+                color: Colors.white,
+                size: 12,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTitle() {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            task.title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              decoration: task.completed ? TextDecoration.lineThrough : null,
+              color: task.completed ? Colors.grey : null,
+            ),
+          ),
+        ),
+        // Badge de categoria
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: task.category.color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            task.category.name,
+            style: TextStyle(
+              fontSize: 10,
+              color: task.category.color,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubtitle() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (task.description.isNotEmpty)
+          Text(
+            task.description,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontSize: 14,
+            ),
+          ),
+        if (task.dueDate != null) ...[
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(
+                Icons.calendar_today,
+                size: 14,
+                color: task.isOverdue ? Colors.red : Colors.grey,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'Vence: ${_formatDueDate(task.dueDate!)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: task.isOverdue ? Colors.red : Colors.grey,
+                  fontWeight: task.isOverdue ? FontWeight.bold : null,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTrailing() {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert),
+      onSelected: (value) {
+        if (value == 'toggle') onToggle();
+        if (value == 'delete') onDelete();
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'toggle',
+          child: Row(
+            children: [
+              Icon(
+                task.completed ? Icons.undo : Icons.check,
+                color: task.completed ? Colors.orange : Colors.green,
+              ),
+              const SizedBox(width: 8),
+              Text(task.completed ? 'Marcar Pendente' : 'Concluir'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: const Row(
+            children: [
+              Icon(Icons.delete, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Excluir'),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   IconData _getPriorityIcon() {
     switch (task.priority) {
       case 'urgent':
-        return Icons.priority_high;
+        return Icons.outlined_flag;
+      case 'high':
+        return Icons.flag;
+      case 'medium':
+        return Icons.outlined_flag;
+      case 'low':
+        return Icons.flag_outlined;
       default:
         return Icons.flag;
     }
   }
 
-  String _getPriorityLabel() {
-    switch (task.priority) {
-      case 'low':
-        return 'Baixa';
-      case 'medium':
-        return 'Média';
-      case 'high':
-        return 'Alta';
-      case 'urgent':
-        return 'Urgente';
-      default:
-        return 'Média';
-    }
-  }
+  String _formatDueDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final due = DateTime(date.year, date.month, date.day);
 
-  @override
-  Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+    if (due == today) return 'Hoje';
+    if (due == tomorrow) return 'Amanhã';
     
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: task.completed ? 1 : 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: task.completed ? Colors.grey.shade300 : _getPriorityColor(),
-          width: 2,
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // Checkbox
-              Checkbox(
-                value: task.completed,
-                onChanged: (_) => onToggle(),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              
-              const SizedBox(width: 12),
-              
-              // Conteúdo Principal
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Título
-                    Text(
-                      task.title,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        decoration: task.completed 
-                            ? TextDecoration.lineThrough 
-                            : null,
-                        color: task.completed 
-                            ? Colors.grey 
-                            : Colors.black,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    
-                    if (task.description.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        task.description,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: task.completed 
-                              ? Colors.grey.shade400 
-                              : Colors.grey.shade700,
-                          decoration: task.completed 
-                              ? TextDecoration.lineThrough 
-                              : null,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                    
-                    const SizedBox(height: 8),
-                    
-                    // Metadata Row
-                    Row(
-                      children: [
-                        // Prioridade
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _getPriorityColor(),
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _getPriorityIcon(),
-                                size: 14,
-                                color: _getPriorityColor(),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _getPriorityLabel(),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: _getPriorityColor(),
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        
-                        const SizedBox(width: 12),
-                        
-                        // Data
-                        Icon(
-                          Icons.access_time,
-                          size: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          dateFormat.format(task.createdAt),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(width: 8),
-              
-              // Botão Deletar
-              IconButton(
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
-                color: Colors.red,
-                tooltip: 'Deletar tarefa',
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    final difference = due.difference(today).inDays;
+    if (difference < 0) {
+      return 'Há ${difference.abs()} dias';
+    } else if (difference <= 7) {
+      return 'Em $difference dias';
+    } else {
+      return '${date.day}/${date.month}/${date.year}';
+    }
   }
 }
